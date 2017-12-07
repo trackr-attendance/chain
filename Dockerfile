@@ -1,12 +1,15 @@
 FROM node:4.6
 
-RUN mkdir /naivechain
-ADD package.json /naivechain/
-ADD main.js /naivechain/
+WORKDIR /app
 
-RUN cd /naivechain && npm install
+# install app dependencies
+COPY package*.json ./
+RUN npm install --production
 
-EXPOSE 3001
+EXPOSE 80
 EXPOSE 6001
 
-ENTRYPOINT cd /naivechain && npm install && PEERS=$PEERS npm start
+# copy app source
+COPY ./ ./
+
+ENTRYPOINT HTTP_PORT=80 PEERS=$PEERS npm start
