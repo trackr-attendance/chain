@@ -25,8 +25,15 @@ var MessageType = {
     RESPONSE_BLOCKCHAIN: 2
 };
 
+var BlockType = {
+    MESSAGE: 0,
+    ATTENDANCE: 1,
+    ENGAGEMENT: 2
+};
+
+
 var getGenesisBlock = () => {
-    return new Block(0, "0", 1465154705, "my genesis block!!", "816534932c2b7154836da6afc367695e6337db8a921823784c14378abed4f7d7");
+    return new Block(0, "0", 1465154705, '{"type":0,"message":"genesis block"}', "1daaa5dff856ff6663ef354fb4b796077954ad77d1de283443791b3e23e64b0a");
 };
 
 var blockchain = [getGenesisBlock()];
@@ -35,13 +42,16 @@ var initHttpServer = () => {
     var app = express();
     app.use(bodyParser.json());
 
-    app.get('/blocks', (req, res) => res.send(JSON.stringify(blockchain)));
+    app.get('/blocks', (req, res) => res.send(blockchain));
     app.post('/mineBlock', (req, res) => {
         var newBlock = generateNextBlock(req.body.data);
-        addBlock(newBlock);
-        broadcast(responseLatestMsg());
-        console.log('block added: ' + JSON.stringify(newBlock));
-        res.send();
+        if (addBlock(newBlock)){
+            broadcast(responseLatestMsg());
+            console.log('block added: ' + JSON.stringify(newBlock));
+            res.send({added: true})
+        }else{
+            res.send({added: false});
+        }
     });
     app.get('/peers', (req, res) => {
         res.send(sockets.map(s => s._socket.remoteAddress + ':' + s._socket.remotePort));
@@ -97,6 +107,7 @@ var initErrorHandler = (ws) => {
 
 
 var generateNextBlock = (blockData) => {
+    blockData = JSON.stringify(blockData);
     var previousBlock = getLatestBlock();
     var nextIndex = previousBlock.index + 1;
     var nextTimestamp = new Date().getTime() / 1000;
@@ -116,7 +127,18 @@ var calculateHash = (index, previousHash, timestamp, data) => {
 var addBlock = (newBlock) => {
     if (isValidNewBlock(newBlock, getLatestBlock())) {
         blockchain.push(newBlock);
+        return true;
     }
+    return false;
+};
+
+var isJsonString = (str) => {
+    try {
+        JSON.parse(str);
+    } catch (e) {
+        return false;
+    }
+    return true;
 };
 
 var isValidNewBlock = (newBlock, previousBlock) => {
@@ -131,6 +153,32 @@ var isValidNewBlock = (newBlock, previousBlock) => {
         console.log('invalid hash: ' + calculateHashForBlock(newBlock) + ' ' + newBlock.hash);
         return false;
     }
+
+    // Check Message Status.
+    if (!isJsonString){
+        console.log('invalid data. must be JSON object.');
+        return false;
+    }
+
+    var objData = JSON.parse(newBlock.data);
+
+    // Ensure Class String Included
+    if (!("class" in objData) || (typeof objData.class == 'undefined')){
+        console.log('invalid data. must be contain <class>.');
+        return false;
+    }
+
+    // Ensure Data Type Included
+    if (!("type" in objData) || (typeof objData.type == 'undefined')){
+        console.log('invalid data. must be contain <type>.');
+        return false;
+    }else{
+        if (!(objData.type == BlockType.MESSAGE || objData.type == BlockType.ATTENDANCE || objData.type == BlockType.ENGAGEMENT)){
+            console.log('invalid type listed. unknown signature.');
+            return false; 
+        }
+    }
+
     return true;
 };
 
