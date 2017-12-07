@@ -3,6 +3,7 @@ var CryptoJS = require("crypto-js");
 var express = require("express");
 var bodyParser = require('body-parser');
 var WebSocket = require("ws");
+var fs = require("fs-extra");
 
 var http_port = process.env.HTTP_PORT || 3001;
 var p2p_port = process.env.P2P_PORT || 6001;
@@ -37,6 +38,11 @@ var getGenesisBlock = () => {
 };
 
 var blockchain = [getGenesisBlock()];
+
+// If Blockchain is stored on disk, revive it.
+if (fs.pathExistsSync('./blockchain.json')){
+    blockchain = fs.readJsonSync('./blockchain.json', { throws: false });
+}
 
 var initHttpServer = () => {
     var app = express();
@@ -256,3 +262,10 @@ var broadcast = (message) => sockets.forEach(socket => write(socket, message));
 connectToPeers(initialPeers);
 initHttpServer();
 initP2PServer();
+
+process.on('SIGINT', function() {
+    console.log("Caught interrupt signal");
+    fs.writeJson('./blockchain.json', blockchain, {spaces: 2}).then(function (){
+        process.exit();
+    });
+});
